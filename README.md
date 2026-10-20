@@ -7,6 +7,8 @@ This is the web version of the standalone project: [pgnclocker](https://gitlab.c
 
 Load (or paste) a game in PGN format, go through the moves one at a time by entering the time remaining on the clock, and download the PGN with `[%clk h:mm:ss]` annotations — useful, for example, for seeing how much time was spent thinking about certain moves or for importing the game into a Lichess study.
 
+![Editing of the timestamps of a move with PgnClocker-web](screenshots/pgnclocker-web-timestampPage.png "Pgn Clocker - Timestamp Page")
+
 ## How to launch it
 
 Open `index.html` with a double-click (or drag it into a browser window). That's all there is to it.
