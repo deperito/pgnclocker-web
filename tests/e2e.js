@@ -80,14 +80,15 @@ async function shot(page, name) {
     await page.fill('#f-minutes', '5');              // solo minuti: ore e secondi vuoti = 0
     await page.click('#next-btn');
     assert.strictEqual(await text(page, '.move-san'), '1... e5');
-    assert.strictEqual(await activeId(page), 'next-btn');
-    ok('"Next move" salva e avanza, il focus resta su "Next move"');
+    assert.strictEqual(await activeId(page), 'f-minutes');
+    ok('"Next move" salva e avanza, il focus va sull\'ultimo campo modificato');
 
     await page.fill('#f-minutes', '4');
     await page.fill('#f-seconds', '59');
     await page.press('#f-seconds', 'Enter');         // Invio = mossa successiva
     assert.strictEqual(await text(page, '.move-san'), '2. ♘f3');
-    ok('Invio in un campo = mossa successiva; cavallo con il simbolo');
+    assert.strictEqual(await activeId(page), 'f-seconds');
+    ok('Invio in un campo = mossa successiva; cavallo con il simbolo; focus sui secondi (ultimo campo modificato)');
 
     await page.click('[data-action=next]');          // mossa 3 senza tempo
     assert.strictEqual(await text(page, '.move-san'), '2... ♞c6'.replace('♞', '♘'));
@@ -244,14 +245,92 @@ async function shot(page, name) {
     await page.click('#load-form button[type=submit]');
     await page.waitForSelector('#move-form');
     assert.ok(await page.locator('.alert-info').count() >= 1);
+    await page.fill('#f-hours', '0');                 // l'ultimo campo modificato è quello delle ore
     await page.click('#next-btn');
     assert.ok(await page.isDisabled('#next-btn'));
-    assert.strictEqual(await activeId(page), 'preview-btn');
-    ok('ultima mossa: "Next" disabilitato e focus su "Preview PGN"; avviso sulle varianti');
+    assert.strictEqual(await activeId(page), 'f-hours');
+    ok('ultima mossa: "Next" disabilitato, focus sull\'ultimo campo modificato; avviso sulle varianti');
     await page.fill('#f-seconds', '7');
-    await page.press('#f-seconds', 'Enter');          // sull'ultima mossa Invio apre l'anteprima
+    await page.press('#f-seconds', 'Enter');          // sull'ultima mossa Invio salva il tempo e resta lì
+    assert.strictEqual(await text(page, '.move-san'), '1... e5');
+    assert.strictEqual(await activeId(page), 'f-seconds');
+    await page.click('#preview-btn');
     await page.waitForSelector('.preview-table');
-    ok('Invio sull\'ultima mossa apre l\'anteprima');
+    assert.strictEqual(await text(page, '.preview-table tbody tr:nth-child(2) td.time'), '0:00:07');
+    ok('Invio sull\'ultima mossa: salva il tempo e resta sulla mossa (non apre l\'anteprima)');
+
+    // ---- 12. focus sull'ultimo campo modificato; Invio = "Next move" ------
+    await page.click('#back-btn');                    // dall'anteprima alla finestra della mossa
+    await page.waitForSelector('#move-form');
+    await page.click('[data-action=new-game]');
+    await page.fill('#pgn_text', '1. e4 *');
+    await page.click('#load-form button[type=submit]');
+    await page.waitForSelector('#move-form');
+    await page.reload();                              // azzera lo stato dell'interfaccia: nessun campo ancora modificato
+    await page.waitForSelector('#move-form');
+    assert.strictEqual(await activeId(page), 'preview-btn');
+    ok('nessun campo modificato e una sola mossa: il focus è su "Preview PGN"');
+
+    await page.click('[data-action=new-game]');
+    await page.fill('#pgn_text', '1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *');
+    await page.click('#load-form button[type=submit]');
+    await page.waitForSelector('#move-form');
+    assert.strictEqual(await activeId(page), 'next-btn');
+    ok('nessun campo ancora modificato: il focus è su "Next move"');
+
+    await page.click('#f-minutes');
+    await page.keyboard.type('3');
+    await page.keyboard.press('Enter');               // Invio = "Next move"
+    assert.strictEqual(await text(page, '.move-san'), '1... e5');
+    assert.strictEqual(await activeId(page), 'f-minutes');
+    await page.keyboard.type('2');                    // senza cliccare: si scrive direttamente nei minuti
+    assert.strictEqual(await page.inputValue('#f-minutes'), '2');
+    await page.keyboard.press('Enter');
+    assert.strictEqual(await text(page, '.move-san'), '2. ♘f3');
+    assert.strictEqual(await activeId(page), 'f-minutes');
+    ok('il focus resta sull\'ultimo campo modificato (minuti) e Invio passa alla mossa dopo');
+
+    await page.click('#f-seconds');                   // ora l'ultimo campo modificato diventa quello dei secondi
+    await page.keyboard.type('9');
+    await page.click('#next-btn');                    // anche con il mouse
+    assert.strictEqual(await text(page, '.move-san'), '2... ♘c6');
+    assert.strictEqual(await activeId(page), 'f-seconds');
+    ok('cambiando campo, il nuovo campo modificato è quello che riceve il focus');
+
+    await page.keyboard.type('5');                    // mossa 2... Nc6: secondi = 5
+    await page.click('[data-action=prev]');           // 2. Nf3, che ha già 9 nei secondi
+    assert.strictEqual(await activeId(page), 'f-seconds');
+    assert.strictEqual(await page.inputValue('#f-seconds'), '9');
+    await page.keyboard.type('7');                    // il valore è selezionato: lo sostituisce
+    assert.strictEqual(await page.inputValue('#f-seconds'), '7');
+    ok('su una mossa con un tempo già impostato il campo è selezionato: scrivendo si sovrascrive');
+
+    await page.evaluate(function () { document.activeElement.blur(); });
+    await page.keyboard.press('Enter');               // nessun elemento con il focus
+    assert.strictEqual(await text(page, '.move-san'), '2... ♘c6');
+    ok('Invio senza nessun elemento con il focus = "Next move"');
+
+    await page.focus('[data-action=prev]');
+    await page.keyboard.press('Enter');               // su un altro pulsante, Invio esegue quel pulsante
+    assert.strictEqual(await text(page, '.move-san'), '2. ♘f3');
+    ok('Invio su "Previous move" esegue "Previous move"');
+
+    for (var step = 0; step < 3; step++) {
+        await page.click('#next-btn');
+    }
+    assert.strictEqual(await text(page, '.move-san'), '3... a6');
+    assert.ok(await page.isDisabled('#next-btn'));
+    assert.strictEqual(await activeId(page), 'f-seconds');
+    await page.keyboard.type('8');
+    await page.keyboard.press('Enter');
+    assert.strictEqual(await text(page, '.move-san'), '3... a6');
+    await page.click('#preview-btn');
+    await page.waitForSelector('.preview-table');
+    var times = await page.$$eval('.preview-table tbody td.time', function (cells) {
+        return cells.map(function (c) { return c.innerText.trim(); });
+    });
+    assert.deepStrictEqual(times, ['0:03:00', '0:02:00', '0:00:07', '0:00:05', '', '0:00:08']);
+    ok('tempi salvati correttamente dopo tutta la sequenza da tastiera');
 
     assert.deepStrictEqual(problems, []);
     ok('nessun errore in console e nessuna richiesta di rete');

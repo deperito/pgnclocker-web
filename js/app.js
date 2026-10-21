@@ -52,6 +52,7 @@
         posted: null,     // {hours, minutes, seconds} inseriti ma non ancora salvati
         postedFor: -1,    // mossa a cui si riferiscono i valori in `posted`
         errors: {},       // campo => chiave di traduzione
+        lastField: null,  // ultimo campo dei tempi modificato ('hours' | 'minutes' | 'seconds'): riceve il focus a ogni mossa
         filename: null    // nome del file scelto dall'utente per il download
     };
 
@@ -568,8 +569,12 @@
         if (focusSelector) {
             el = $(focusSelector);
         } else if (view === 'edit') {
-            // primo campo errato; altrimenti "Next move" (o l'anteprima sull'ultima mossa)
+            // primo campo errato; altrimenti l'ultimo campo modificato (così si può scrivere subito);
+            // se non ne è stato modificato nessuno, "Next move" (o l'anteprima sull'ultima mossa)
             el = $('input.invalid');
+            if (!el && ui.lastField) {
+                el = $('#f-' + ui.lastField);
+            }
             if (!el) {
                 var next = $('#next-btn');
                 el = (next && !next.disabled) ? next : $('#preview-btn');
@@ -690,17 +695,31 @@
     }
 
     function onKeydown(event) {
-        // Invio in un campo del tempo = mossa successiva (o anteprima se è l'ultima)
-        if (event.key === 'Enter' && event.target.matches && event.target.matches('input[data-field]')) {
-            event.preventDefault();
-            navigate(state.current === state.game.getNumberOfMoves() - 1 ? 'preview' : 'next');
+        // Invio = sempre "Next move", ovunque ci si trovi nella finestra della mossa corrente.
+        // Sull'ultima mossa, dove "Next move" è disattivato, si salva solo il tempo e si resta lì.
+        // Fanno eccezione i pulsanti, i link e le altre caselle di testo: lì Invio mantiene il suo
+        // significato normale (per esempio su "Previous move" esegue "Previous move").
+        if (event.key !== 'Enter' || event.isComposing || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+            return;
         }
+        if (state === null || currentView() !== 'edit') {
+            return;
+        }
+        var target = event.target;
+        if (target && target.closest && target.closest('button, a, textarea, select, input:not([data-field])')) {
+            return;
+        }
+
+        event.preventDefault();
+        navigate('next');
     }
 
     function onInput(event) {
         var input = event.target;
 
         if (input.matches && input.matches('input[data-field]')) {
+            ui.lastField = input.getAttribute('data-field');
+
             // solo cifre; minuti e secondi oltre 59 vengono evidenziati (la validazione vera è in ClockHelper)
             var cleaned = input.value.replace(/\D+/g, '');
             if (cleaned !== input.value) {
@@ -736,7 +755,7 @@
 
         root.addEventListener('click', onClick);
         root.addEventListener('submit', onSubmit);
-        root.addEventListener('keydown', onKeydown);
+        g.document.addEventListener('keydown', onKeydown);
         root.addEventListener('input', onInput);
         root.addEventListener('focusin', onFocusIn);
         g.addEventListener('hashchange', function () {
