@@ -76,4 +76,3 @@ If you need further support, feel free to contact me directly at alessiomartoran
 ## License
 PGNClocker-Web is licensed under the GPL 3 (or any later version at your option)\
 ![GPL3 or later logo](gplv3-or-later.png "GPL3 or later logo")
-
